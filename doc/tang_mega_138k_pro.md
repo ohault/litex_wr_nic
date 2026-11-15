@@ -156,13 +156,23 @@ reports one edge per WR second at cycle 1 of the second: the edge is at the
 start of the second plus the timestamper's own input register, so a
 cross-board measurement subtracts 8 ns for it.
 
-Read them with the bench helper (the timestamped offset inside the second is
-`cycles x 8 ns + index x 1 ns`):
+Read them with `tools/tang_pps.py` over `litex_server` (see the USB and
+optical test below); the timestamped offset inside the second is
+`cycles x 8 ns + index x 1 ns`:
 
 ```sh
-python3 tang_pps.py --build <output-dir> --samples 20
-python3 tang_pps.py --build <output-dir> --scan-delay
+python3 tools/tang_pps.py --build build/tang_mega_138k_pro_wr --samples 20
+python3 tools/tang_pps.py --build build/tang_mega_138k_pro_wr --output --samples 5
+python3 tools/tang_pps.py --build build/tang_mega_138k_pro_wr --scan-delay --tap-step 4
 ```
+
+The first command clears `pps_timestamper_count`, prints each new edge and
+the mean, spread and standard deviation of the offsets; `--output` reads
+`pps_out_timestamper_*` instead. `--scan-delay` steps `pps_sampler_delay`
+over its 256 taps (two seconds per setting) and reports the tap at which the
+timestamp moves to the next sample: the edge sat that many taps (about
+12.5 ps each, nominal) before the sample it was first reported at. The delay
+is set back to 0 taps at the end.
 
 For the cross-board measurement, connect the peer's PPS output to PMOD0 pin 1
 with a common ground, subtract the cable delay, and compare consecutive
@@ -182,8 +192,15 @@ repeating the WR handshake gave a round-trip delay of 943530, 943527 and
 (8 ns) or a bit (800 ps).
 
 ```sh
-python3 tang_relink.py --build <output-dir> --cycles 6
+python3 tools/tang_relink.py --build build/tang_mega_138k_pro_wr --cycles 6
 ```
+
+Each cycle sets and clears `phy_control.reset` (keeping `bitslide`), waits for
+`phy_status` to report the PHY ready, prints the FIFO occupancies and the
+alignment events of the cycle, then waits `--settle` seconds (30 by default)
+for the WR handshake: read `crtt` with `stat` in the WR console meanwhile. It
+warns when a cycle's FIFO occupancies differ from the first cycle's or when a
+cycle saw more than one comma alignment.
 
 `phy_fifo_levels` reports the SerDes interface FIFO occupancies (2 and 14
 words on this bench, unchanged across acquisitions) and `phy_link_events`
